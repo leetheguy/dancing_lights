@@ -1,31 +1,19 @@
 #include <Metro.h>
 
 // LED PWMs
-const int b1pin       = 2;
-const int g1pin       = 3;
-const int r1pin       = 4;
-const int b2pin       = 5;
-const int g2pin       = 6;
-const int r2pin       = 7;
-const int b3pin       = 8;
-const int g3pin       = 9;
-const int r3pin       = 10;
-
-// RGB Analog Inputs
-const int inp1      = A0;
-const int inp2    = A1;
-const int inp3     = A2;
+const int bpin        = 2;
+const int gpin        = 3;
+const int rpin        = 4;
 
 // LED Intensities
-int r1i               = 255;
-int g1i               = 255;
-int b1i               = 255;
-int r2i               = 255;
-int g2i               = 255;
-int b2i               = 255;
-int r3i               = 255;
-int g3i               = 255;
-int b3i               = 255;
+int rInt              = 255;
+int gInt              = 255;
+int bInt              = 255;
+
+// RGB Inputs
+int rInp              = A0;
+int gInp              = A1;
+int bInp              = A2;
 
 // Array Address Constants
 //   Color:
@@ -33,15 +21,15 @@ const int red         = 0;
 const int green       = 1;
 const int blue        = 2;
 //   State:
-const int stateBlink  = 0;
-const int stateCycle  = 1;
+const int stateGlow   = 0;
+const int stateBlink  = 1;
 const int statePulse  = 2;
 const int statePop    = 3;
-const int stateGlow   = 4;
+const int stateCycle  = 4;
 const int stateListen = 5;
 
 // Blink Variables
-bool blinkon           = false;
+bool blinkon          = false;
 
 // Cycle Variables
 int active            = 0;
@@ -50,6 +38,7 @@ int other             = 0;
 int velDir            = 1;
 
 // Pulse Variables
+float pulseCount      = 1;
 int pulseDir          = 1;
 
 // Pop Variables
@@ -57,84 +46,79 @@ int popCount          = 286;
 
 // State Variables
 int state             = 0;
-int stateCount        = 6;
+int stateCount        = 3;
 
 // Loop Frequencies
-Metro cycleSpeed      = Metro(20);
-Metro pulseSpeed      = Metro(5);
-Metro popSpeed        = Metro(10);
+Metro glowSpeed       = Metro(20);
 Metro blinkSpeed      = Metro(500);
+Metro pulseSpeed      = Metro(20);
+Metro popSpeed        = Metro(10);
+Metro cycleSpeed      = Metro(20);
 Metro status          = Metro(500);
-Metro stateChange     = Metro(10000);
+
+Metro stateChange     = Metro(2000);
 
 // nobs capture a range between 383 & 639
 // to represent the approximate range of the pots
 // numbers are based on a 1/8 from center range
-int nob1() {
-  int a = analogRead(inp1)-383;
+// rInp: 330 - 480
+// gInp: 390 - 550 
+// bInp: 210 - 360
+int redNob() {
+  int a = analogRead(rInp)-330;
+  a = (a*0.85);
   a = a < 0   ? 0   : a;
-  a = a > 250 ? 250 : a;
+  a = a > 127 ? 127 : a;
   return 255-a;
-//  return 0;
 }
 
-int nob2() {
-  int a = analogRead(inp2)-383;
+int greenNob() {
+  int a = analogRead(gInp)-400;
+  a = (a*0.85)*2;
   a = a < 0   ? 0   : a;
-  a = a > 250 ? 250 : a;
+  a = a > 255 ? 255 : a;
   return 255-a;
-//  return 0;
 }
 
-int nob3() {
-  int a = analogRead(inp3)-383;
+int blueNob() {
+  int a = analogRead(bInp)-220;
+  a = (a*0.85)*2;
   a = a < 0   ? 0   : a;
-  a = a > 250 ? 250 : a;
+  a = a > 255 ? 255 : a;
   return 255-a;
-//  return 0;
 }
 
-int blink() {
+void glow() {
+  int r;
+  analogWrite(bpin, blueNob());
+  analogWrite(gpin, greenNob());
+  analogWrite(rpin, redNob());
+}
+
+void blink() {
   int i;
   int r;
   blinkon = !blinkon;
   if(blinkon) {
-    analogWrite(b1pin, 255);
-    analogWrite(g1pin, 255);
-    analogWrite(r1pin, 255);
-    analogWrite(b2pin, 255);
-    analogWrite(g2pin, 255);
-    analogWrite(r2pin, 255);
-    analogWrite(b3pin, 255);
-    analogWrite(g3pin, 255);
-    analogWrite(r3pin, 255);
+    analogWrite(bpin, 255);
+    analogWrite(gpin, 255);
+    analogWrite(rpin, 255);
   } else {
-// math to red leds to compensate for extreme red brightness
-    analogWrite(b1pin, nob1());
-    analogWrite(g1pin, nob2());
-    r = nob3() + 128;
-    r = r > 255 ? 255 : r;
-    analogWrite(r1pin, r);
-    analogWrite(b2pin, nob3());
-    analogWrite(g2pin, nob1());
-    r = nob2() + 128;
-    r = r > 255 ? 255 : r;
-    analogWrite(r2pin, r);
-    analogWrite(b3pin, nob2());
-    analogWrite(g3pin, nob3());
-    r = nob1() + 128;
-    r = r > 255 ? 255 : r;
-    analogWrite(r3pin, r);
+    analogWrite(bpin, blueNob());
+    analogWrite(gpin, greenNob());
+    analogWrite(rpin, redNob());
   }
 }
 
-int pulse(int i) {
-  if (i > 254)
+void pulse() {
+  if (pulseCount > 0.99)
     pulseDir = -1;
-  else if (i < 1)
+  if (pulseCount < 0.01)
     pulseDir = 1;
-  i += pulseDir;
-  return i;
+  pulseCount += pulseDir * 0.01;
+  analogWrite(bpin, 255 - ((255-blueNob())  * pulseCount));
+  analogWrite(gpin, 255 - ((255-greenNob()) * pulseCount));
+  analogWrite(rpin, 255 - ((255-redNob())   * pulseCount));
 }
 
 int pop() {
@@ -179,62 +163,59 @@ void cycle(int *r, int *g, int *b) {
 }
 
 void setup() {
-  pinMode(b1pin, OUTPUT);
-  analogWrite(b1pin,255);
-  pinMode(g1pin, OUTPUT);
-  analogWrite(g1pin,255);
-  pinMode(r1pin, OUTPUT);
-  analogWrite(r1pin,255);
-  pinMode(b2pin, OUTPUT);
-  analogWrite(b2pin,255);
-  pinMode(g2pin, OUTPUT);
-  analogWrite(g2pin,255);
-  pinMode(r2pin, OUTPUT);
-  analogWrite(r2pin,255);
-  pinMode(b3pin, OUTPUT);
-  analogWrite(b3pin,255);
-  pinMode(g3pin, OUTPUT);
-  analogWrite(g3pin,255);
-  pinMode(r3pin, OUTPUT);
-  analogWrite(r3pin,255);
+  pinMode(rpin, OUTPUT);
+  analogWrite(rpin,255);
+  pinMode(gpin, OUTPUT);
+  analogWrite(gpin,255);
+  pinMode(bpin, OUTPUT);
+  analogWrite(bpin,255);
 
-  pinMode(inp1, INPUT);
-  pinMode(inp2, INPUT);
-  pinMode(inp3, INPUT);
+  pinMode(rInp, INPUT);
+  pinMode(gInp, INPUT);
+  pinMode(bInp, INPUT);
 
   Serial.begin(9600);
 }
 
 void loop() {
 //  if (popSpeed.check() == 1) {
-//    r1i = pop();
-//    analogWrite(r1pin, r1i);
+//    rInt = pop();
+//    analogWrite(rpin, rInt);
 //  }
-//  if (stateChange.check() == 1) {
+  if (stateChange.check() == 1) {
+    state = 2;
 //    if(state >= (stateCount-1))
 //      state = 0;
 //    else
 //      state += 1;
-//    analogWrite(r1pin,255);
-//    analogWrite(g1pin,0);
-//    analogWrite(b1pin,0);
+//    analogWrite(rpin,255);
+//    analogWrite(gpin,0);
+//    analogWrite(bpin,0);
 //    analogWrite(r2pin,0);
 //    analogWrite(g2pin,0);
 //    analogWrite(b2pin,255);
 //    analogWrite(r3pin,0);
 //    analogWrite(g3pin,255);
 //    analogWrite(b3pin,0);
-//  }
-
-  if (blinkSpeed.check() == 1 && state == stateBlink) {
-    blink();
   }
 
+//  if (glowSpeed.check() == 1 && state == stateGlow) {
+//    glow();
+//  }
+//
+//  if (blinkSpeed.check() == 1 && state == stateBlink) {
+//    blink();
+//  }
+//
+  if (pulseSpeed.check() == 1 && state == statePulse) {
+    pulse();
+  }
+//
 //  if (cycleSpeed.check() == 1) {// && state == stateCycle) {
-//    cycle(&r1i, &g1i, &b1i);
-//    analogWrite(b1pin,255-b1i);
-//    analogWrite(g1pin,255-g1i);
-//    analogWrite(r1pin,255-r1i);
+//    cycle(&rInt, &gInt, &bInt);
+//    analogWrite(bpin,255-bInt);
+//    analogWrite(gpin,255-gInt);
+//    analogWrite(rpin,255-rInt);
 //    cycle(&r2i, &g2i, &b2i);
 //    analogWrite(b2pin,255-b2i);
 //    analogWrite(g2pin,255-g2i);
@@ -249,18 +230,19 @@ void loop() {
     char out[256];
 //    snprintf (out, sizeof out, "high: %i, low: %i", HIGH, LOW);
 //    snprintf (out, sizeof out, "active: %i", active);
-//    snprintf (out, sizeof out, "r1: %i,g1: %i,b1: %i", analogRead(r1i);
-//    snprintf (out, sizeof out, "r2: %i,g2: %i,b2: %i", r1i, g1i, b1i);
-//    snprintf (out, sizeof out, "r3: %i,g3: %i,b3: %i", r1i, g1i, b1i);
+//    snprintf (out, sizeof out, "r1: %i,g1: %i,b1: %i", analogRead(rInt);
+//    snprintf (out, sizeof out, "r2: %i,g2: %i,b2: %i", rInt, gInt, bInt);
+//    snprintf (out, sizeof out, "r3: %i,g3: %i,b3: %i", rInt, gInt, bInt);
 //    snprintf (out, sizeof out, "active: %i", active);
 //    snprintf (out, sizeof out, "dir: %i", dir);
 //    snprintf (out, sizeof out, "velocity: %i", velocity);
-//    snprintf (out, sizeof out, "intensity: %i", r1i);
-//    analogWrite(r1pin, pulse(r1pin));
-//    Serial.println(pulse(r1pin, &r1i));
+//    snprintf (out, sizeof out, "intensity: %i", rInt);
+//    analogWrite(rpin, pulse(rpin));
+//    Serial.println(pulse(rpin, &rInt));
 //    Serial.println(dir);
-//    Serial.println(analogRead(nob1()));
-//    Serial.println(analogRead(nob2()));
-    Serial.println(nob1());
+//    Serial.println(analogRead(blueNob()));
+//    Serial.println(analogRead(greenNob()));
+//    Serial.println(analogRead(rInp));
+    Serial.println((255-blueNob())*pulseCount);
   }
 }

@@ -66,9 +66,9 @@ Metro stateChange     = Metro(2000);
 // bInp: 210 - 360
 int redNob() {
   int a = analogRead(rInp)-330;
-  a = (a*0.85);
+  a = (a*0.85)*2;
   a = a < 0   ? 0   : a;
-  a = a > 127 ? 127 : a;
+  a = a > 255 ? 255 : a;
   return 255-a;
 }
 

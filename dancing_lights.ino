@@ -15,6 +15,9 @@ int rInp              = A0;
 int gInp              = A1;
 int bInp              = A2;
 
+// Mic Input
+int micInp            = A5;
+
 // Array Address Constants
 //   Color:
 const int red         = 0;
@@ -25,8 +28,12 @@ const int stateGlow   = 0;
 const int stateBlink  = 1;
 const int statePulse  = 2;
 const int statePop    = 3;
-const int stateCycle  = 4;
-const int stateListen = 5;
+const int stateListen = 4;
+const int stateCycle  = 5;
+
+// Button Variables
+int  buttonPin        = 52;
+bool buttonPressed    = false;
 
 // Blink Variables
 bool blinkon          = false;
@@ -42,17 +49,18 @@ float pulseCount      = 1;
 int pulseDir          = 1;
 
 // Pop Variables
-int popCount          = 286;
+float popCount        = 0;
 
 // State Variables
 int state             = 0;
-int stateCount        = 3;
+int stateCount        = 5;
 
 // Loop Frequencies
 Metro glowSpeed       = Metro(20);
 Metro blinkSpeed      = Metro(500);
 Metro pulseSpeed      = Metro(20);
 Metro popSpeed        = Metro(10);
+Metro listenSpeed     = Metro(5);
 Metro cycleSpeed      = Metro(20);
 Metro status          = Metro(500);
 
@@ -96,8 +104,6 @@ void glow() {
 }
 
 void blink() {
-  int i;
-  int r;
   blinkon = !blinkon;
   if(blinkon) {
     analogWrite(bpin, 255);
@@ -122,17 +128,29 @@ void pulse() {
 }
 
 int pop() {
-  popCount -= 1;
+  popCount += 0.01;
 
-  if(popCount < -31)
-    popCount = 350;
+  if(popCount > 2)
+    popCount = -1;
 
-    if (popCount < 1)
-      return 0;
-    else if (popCount > 254)
-      return 255;
-    else
-      return popCount;
+  float c = popCount;
+
+  if (c < 0)
+    c = 0;
+  else if (c > 1)
+    c = 1;
+  analogWrite(bpin, 255 - ((255-blueNob())  * c));
+  analogWrite(gpin, 255 - ((255-greenNob()) * c));
+  analogWrite(rpin, 255 - ((255-redNob())   * c));
+}
+
+void listen() {
+  float l = analogRead(micInp)*0.000976525;
+  Serial.println(l);
+
+  analogWrite(bpin, 255 - ((255 - blueNob())  * l));
+  analogWrite(gpin, 255 - ((255 - greenNob()) * l));
+  analogWrite(rpin, 255 - ((255 - redNob())   * l));
 }
 
 void cycle(int *r, int *g, int *b) {
@@ -182,35 +200,37 @@ void loop() {
 //    rInt = pop();
 //    analogWrite(rpin, rInt);
 //  }
-  if (stateChange.check() == 1) {
-    state = 2;
-//    if(state >= (stateCount-1))
-//      state = 0;
-//    else
-//      state += 1;
-//    analogWrite(rpin,255);
-//    analogWrite(gpin,0);
-//    analogWrite(bpin,0);
-//    analogWrite(r2pin,0);
-//    analogWrite(g2pin,0);
-//    analogWrite(b2pin,255);
-//    analogWrite(r3pin,0);
-//    analogWrite(g3pin,255);
-//    analogWrite(b3pin,0);
+  if(digitalRead(buttonPin) && !buttonPressed) {
+    buttonPressed = true;
+    if(state >= (stateCount-1))
+      state = 0;
+    else
+      state += 1;
   }
 
-//  if (glowSpeed.check() == 1 && state == stateGlow) {
-//    glow();
-//  }
-//
-//  if (blinkSpeed.check() == 1 && state == stateBlink) {
-//    blink();
-//  }
-//
+  if(!digitalRead(buttonPin) && buttonPressed)
+    buttonPressed = false;
+
+  if (glowSpeed.check() == 1 && state == stateGlow) {
+    glow();
+  }
+
+  if (blinkSpeed.check() == 1 && state == stateBlink) {
+    blink();
+  }
+
   if (pulseSpeed.check() == 1 && state == statePulse) {
     pulse();
   }
-//
+
+  if (popSpeed.check() == 1 && state == statePop) {
+    pop();
+  }
+
+  if (listenSpeed.check() == 1 && state == stateListen) {
+    listen();
+  }
+
 //  if (cycleSpeed.check() == 1) {// && state == stateCycle) {
 //    cycle(&rInt, &gInt, &bInt);
 //    analogWrite(bpin,255-bInt);
@@ -243,6 +263,5 @@ void loop() {
 //    Serial.println(analogRead(blueNob()));
 //    Serial.println(analogRead(greenNob()));
 //    Serial.println(analogRead(rInp));
-    Serial.println((255-blueNob())*pulseCount);
   }
 }
